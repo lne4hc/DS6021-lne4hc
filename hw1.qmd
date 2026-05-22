@@ -27,3 +27,75 @@ plot(R$x1, f4(R), xlab = "x1", ylab = "Prediction", type = "l",
 plot(R$x1, f5(R), xlab = "x1", ylab = "Prediction", type = "l",
      main = "Partial Effect Plot: f5")
 ```
+
+## Question 3
+
+```{r}
+library(ds6021b)
+
+# -------------------
+# x3 = 0
+# -------------------
+
+R0 <- expand.grid(
+  x1 = seq(-3, 3, by = 0.01),
+  x2 = -0.5,
+  x3 = 0
+)
+
+plot(R0$x1, f1(R0),
+     type = "l",
+     col = "blue",
+     ylim = range(
+       c(f1(R0), f2(R0), f3(R0), f4(R0), f5(R0))
+     ),
+     xlab = "x1",
+     ylab = "Prediction",
+     main = "All Models Comparison (x3 = 0)"
+)
+
+lines(R0$x1, f2(R0), col = "red")
+lines(R0$x1, f3(R0), col = "green")
+lines(R0$x1, f4(R0), col = "purple")
+lines(R0$x1, f5(R0), col = "orange")
+
+legend("topleft",
+       legend = c("f1", "f2", "f3", "f4", "f5"),
+       col = c("blue", "red", "green", "purple", "orange"),
+       lty = 1)
+
+# -------------------
+# x3 = 1
+# -------------------
+
+R1 <- expand.grid(
+  x1 = seq(-3, 3, by = 0.01),
+  x2 = -0.5,
+  x3 = 1
+)
+
+plot(R1$x1, f1(R1),
+     type = "l",
+     col = "blue",
+     ylim = range(
+       c(f1(R1), f2(R1), f3(R1), f4(R1), f5(R1))
+     ),
+     xlab = "x1",
+     ylab = "Prediction",
+     main = "All Models Comparison (x3 = 1)"
+)
+
+lines(R1$x1, f2(R1), col = "red")
+lines(R1$x1, f3(R1), col = "green")
+lines(R1$x1, f4(R1), col = "purple")
+lines(R1$x1, f5(R1), col = "orange")
+
+legend("topleft",
+       legend = c("f1", "f2", "f3", "f4", "f5"),
+       col = c("blue", "red", "green", "purple", "orange"),
+       lty = 1)
+```
+
+## Question 4
+
+The figures show that the five models produce different prediction patterns as x1 changes. Some models appear more linear while others capture nonlinear relationships and interactions. Comparing the plots for x3 = 0 and x3 = 1 shows that changing x3 affects the predictions, meaning x3 influences the relationship between x1 and the response variable. The models also differ in flexibility, with some showing smoother trends and others showing more complex behavior.
