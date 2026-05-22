@@ -1,0 +1,19 @@
+project:
+  type: book
+
+book:
+  title: "Intro Pred Model Portfolio"
+  author: "Liane Emmim"
+  date: "5/22/2026"
+  chapters:
+    - hw1.qmd
+  
+format:
+  html:
+    theme:
+      - cosmo
+      - brand
+
+
+
+

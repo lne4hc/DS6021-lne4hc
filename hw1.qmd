@@ -1,0 +1,29 @@
+# HW 1: Visualizing Model
+
+1. Complete
+
+2.
+```{r}
+library(ds6021b)
+
+R <- expand.grid(
+  x1 = seq(-3, 3, by = 0.01),
+  x2 = -0.5,
+  x3 = 0
+)
+
+plot(R$x1, f1(R), xlab = "x1", ylab = "Prediction", type = "l",
+     main = "Partial Effect Plot: f1")
+
+plot(R$x1, f2(R), xlab = "x1", ylab = "Prediction", type = "l",
+     main = "Partial Effect Plot: f2")
+
+plot(R$x1, f3(R), xlab = "x1", ylab = "Prediction", type = "l",
+     main = "Partial Effect Plot: f3")
+
+plot(R$x1, f4(R), xlab = "x1", ylab = "Prediction", type = "l",
+     main = "Partial Effect Plot: f4")
+
+plot(R$x1, f5(R), xlab = "x1", ylab = "Prediction", type = "l",
+     main = "Partial Effect Plot: f5")
+```
