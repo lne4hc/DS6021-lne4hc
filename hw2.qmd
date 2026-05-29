@@ -1,0 +1,120 @@
+# HW 2: External measures of performance - Liane Emmim
+
+1. Complete 
+
+2. 
+```{r, fig.width=12, fig.height=8, dev="png"}
+library(ds6021b)
+library(ds6021c)
+
+set.seed(23583)
+d <- external_data(1000)
+
+rules <- c("f1","f2","f3","f4","f5")
+
+for(fi in rules){
+
+  pred <- get(fi)(d)
+
+  par(mfrow=c(1,2))
+
+  for(group in c(0,1)){
+
+    idx <- d$x3 == group
+
+    plot(pred[idx],
+         d$y[idx],
+         main=paste(fi," x3 =",group),
+         xlab="Predicted",
+         ylab="Observed",
+         pch=16)
+
+    lines(lowess(pred[idx], d$y[idx]),
+          col="red",
+          lwd=2)
+
+    abline(0,1,lty=2)
+  }
+}
+```
+
+3.
+```{r}
+rules <- c("f1", "f2", "f3", "f4", "f5")
+
+for(fi in rules){
+
+  pred <- get(fi)(d)
+
+  residuals <- d$y - pred
+
+  hist(residuals,
+       main = paste("Residual Distribution:", fi),
+       xlab = "Residual",
+       col = "lightblue",
+       border = "white")
+
+  abline(v = 0,
+         col = "red",
+         lwd = 2)
+}
+```
+
+4. 
+```{r}
+results <- data.frame(
+  Rule = rules,
+  ESE = NA,
+  EAE = NA,
+  Q90 = NA
+)
+
+for(i in 1:length(rules)){
+
+  pred <- get(rules[i])(d)
+
+  err <- d$y - pred
+
+  results$ESE[i] <- mean(err^2)
+  results$EAE[i] <- mean(abs(err))
+  results$Q90[i] <- quantile(abs(err), 0.90)
+}
+
+results
+```
+
+Visual 1: Expected Squared Error
+
+```{r}
+barplot(results$ESE,
+        names.arg = results$Rule,
+        main = "Expected Squared Error",
+        ylab = "ESE",
+        col = "lightblue")
+```
+
+Visual 2: Expected Absolute Error
+
+```{r}
+barplot(results$EAE,
+        names.arg = results$Rule,
+        main = "Expected Absolute Error",
+        ylab = "EAE",
+        col = "lightgreen")
+
+```
+
+Visual 3: 90th Percentile of Absolute Error
+
+```{r}
+barplot(results$Q90,
+        names.arg = results$Rule,
+        main = "90th Quantile of Absolute Error",
+        ylab = "90th Quantile",
+        col = "lightcoral")
+
+```
+
+
+5. 
+Discrimination measures a model's ability to correctly rank observations according to their outcomes. While calibration assesses whether predicted values align with observed values, discrimination evaluates whether observations with larger outcomes tend to receive larger predictions. A model can have good discrimination even if its predictions are systematically too high or too low, provided it preserves the correct ordering of observations. Discrimination is important because many decision-making applications rely on ranking individuals by risk or expected outcome rather than predicting exact values. As a result, discrimination and calibration provide complementary perspectives on model performance and should be evaluated together.
