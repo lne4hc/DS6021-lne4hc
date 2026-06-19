@@ -7,6 +7,10 @@ book:
   date: "5/22/2026"
   chapters:
     - hw1.qmd
+    - hw2.qmd
+    - hw3.qmd
+    - hw4.qmd
+    - hw5.qmd
   
 format:
   html:

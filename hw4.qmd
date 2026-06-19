@@ -1,0 +1,117 @@
+HW4 - Information Sharing 
+
+1. Complete
+
+2.  
+```{r}
+# Number of cells in largest model
+cells <- 4 * 6 * 3
+cells
+
+# Parameters in smallest model
+smallest_model_params <- 1
+smallest_model_params
+
+# Expected number of unobserved cells
+n <- 30
+
+prob_unobserved <- (1 - 1/cells)^n
+expected_unobserved <- cells * prob_unobserved
+
+prob_unobserved
+expected_unobserved
+```
+
+ The largest model contains 4 x 6 x 3 = 72 cells. The smallest model has only 1 parameter (the overall mean). In training data set, we expect 47.32 unobserved cells. 
+
+ 3. 
+```{r}
+xa <- 0.38
+ya <- 1.92
+
+xb <- 0.57
+yb <- 2.04
+
+x0 <- 0.45
+
+wa <- (xb - x0)/(xb - xa)
+wb <- (x0 - xa)/(xb - xa)
+
+wa
+wb
+
+wa + wb
+
+yhat <- wa * ya + wb * yb
+yhat
+```
+
+ The weights show how much influence each neighboring observation has on the prediction. Since wa = 0.6316 is larger than wb = 0.3684, the observation at xa = 0.38 has a greater impact on the predicted value than the observation at xb = 0.57.  This makes sense because x0 = 0.45 is closer to xa.  In general, linear interpollation makes more weighht to closer neighbors and less weight to furtner neighbors.  So prediction is influnced by nearby observations. 
+
+
+4.
+```{r}
+df <- data.frame(
+  x = c(0.22,0.37,0.57,0.66,0.03,
+        0.92,0.77,0.73,0.11,0.40),
+  y = c(2.14,1.89,1.99,1.88,2.26,
+        2.11,1.92,1.98,2.47,2.10)
+)
+
+knn3 <- function(x0, data){
+
+  distances <- abs(data$x - x0)
+
+  nearest <- order(distances)[1:3]
+
+  mean(data$y[nearest])
+}
+
+knn3(0.20, df)
+knn3(0.50, df)
+knn3(0.70, df)
+```
+
+5. 
+```{r}
+library(ggplot2)
+
+knn3 <- function(x0, data){
+
+  distances <- abs(data$x - x0)
+
+  nearest <- order(distances)[1:3]
+
+  mean(data$y[nearest])
+}
+
+grid <- seq(0, 1, length.out = 500)
+
+predictions <- sapply(grid, knn3, data = df)
+
+plot_df <- data.frame(
+  x = grid,
+  yhat = predictions
+)
+
+ggplot() +
+  geom_point(
+    data = df,
+    aes(x = x, y = y),
+    size = 3
+  ) +
+  geom_line(
+    data = plot_df,
+    aes(x = x, y = yhat),
+    linewidth = 1
+  ) +
+  labs(
+    title = "3-Nearest Neighbor Prediction Function",
+    x = "x",
+    y = "y"
+  ) +
+  theme_minimal()
+```
+
+6. 
+The largest model gives each covariate combination its own estimate, allowing it to fit the training data perfectly. However, many cells may have little or no data, making the model sensitive to noise and poor at predicting new observations. Information sharing improves prediction by allowing similar cells to borrow strength from one another, resulting in more stable estimates. The largest model is most appropriate when there is plenty of data in every cell and the true cell means are genuinely different. Otherwise, models that share information typically provide better out-of-sample performance.
