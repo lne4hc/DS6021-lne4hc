@@ -1,0 +1,155 @@
+HW 6 : Express Linear Model - LE
+
+
+```{r}
+library(tidyverse)
+library(rms)
+
+insurance <- read.csv("insurance.csv")
+
+insurance$smoker <- factor(insurance$smoker)
+insurance$region <- factor(insurance$region)
+```
+
+Research question: Does smoking increase expected medical insurance charges, and by how much?
+
+0. DONE 
+
+1. 
+## Question 1
+
+The linear regression model is
+
+$$
+Y = X\beta + \epsilon
+$$
+
+where:
+
+- \(Y\) is the vector of insurance charges.
+- \(X\) is the matrix of predictors (age, BMI, smoker, and region).
+- \(\beta\) is the vector of regression coefficients.
+- \(\epsilon\) is the error term.
+
+$$
+\text{charges}_i =
+\beta_0 +
+\beta_1(\text{age}_i) +
+\beta_2(\text{bmi}_i) +
+\beta_3(\text{smoker}_i) +
+\beta_4(\text{region}_i) +
+\epsilon_i.
+$$
+
+
+The columns of \(X\) include:
+
+- Intercept
+- Age
+- BMI
+- Smoker status
+- Region indicator variables
+
+Each coefficient in \(\beta\) represents the expected change in insurance charges associated with its predictor while holding the other variables constant.
+
+
+
+2. 
+The model answers the research question by estimating how each predictor affects insurance charges while holding the other variables constant. The coefficient for `smoker` directly addresses whether smoking is associated with higher charges. Its value represents the expected difference in insurance charges between smokers and non-smokers, after accounting for age, BMI, and region.
+
+
+3. 
+```{r}
+fit <- lm(charges ~ age + bmi + smoker + region,
+          data = insurance)
+
+summary(fit)
+
+confint(fit, "smokeryes")
+```
+
+| Coefficient | Estimate | Std. Error |
+|------------|---------:|-----------:|
+| Intercept | -11601.56 | 976.20 |
+| age | 258.64 | 11.93 |
+| bmi | 340.01 | 28.67 |
+| smokeryes | 23852.48 | 413.51 |
+| regionnorthwest | -303.52 | 477.85 |
+| regionsoutheast | -1038.63 | 480.49 |
+| regionsouthwest | -915.94 | 479.56 |
+
+The 95% confidence interval for the smoking coefficient is
+
+$$
+(23041.29,\ 24663.68).
+$$
+
+Interpretation: Holding age, BMI, and region constant, smokers are expected to have medical insurance charges approximately $23,852 higher than non-smokers on average.
+
+4. 
+```{r}
+library(rms)
+
+dd <- datadist(insurance)
+options(datadist = "dd")
+
+fit_ols <- ols(charges ~ age + bmi + smoker + region,
+               data = insurance)
+
+summary(fit_ols)
+
+fit_lm <- lm(charges ~ age + bmi + smoker + region,data = insurance)
+
+confint(fit_lm, "smokeryes")
+summary(fit_ols)
+```
+
+The coefficient estimates from `lm()` and `ols()` are identical because both methods fit the same linear regression model.
+
+The 95% confidence interval for the smoking coefficient from `lm()` is approximately
+
+$$
+(23041.29,\ 24663.68).
+$$
+
+The `ols()` function provides additional information such as effect summaries, predictor ranges, and model validation statistics that are not included in the standard `lm()` output.
+
+5. 
+
+Since `region` has four levels, R creates three indicator variables and uses one level as the reference category. By default, R uses the first level alphabetically as the reference, which is:
+
+```{r}
+levels(insurance$region)
+```
+
+The reference level is **northeast**.
+
+```{r}
+contrasts(insurance$region)
+```
+
+Refit the model using cell means coding:
+
+```{r}
+fit_cell <- lm(charges ~ age + bmi + smoker + region - 1,
+               data = insurance)
+
+summary(fit_cell)
+```
+
+Compare the fitted values from both models:
+
+```{r}
+all.equal(
+  fitted(fit_lm),
+  fitted(fit_cell)
+)
+```
+
+The output is:
+
+```r
+[1] TRUE
+```
+
+Therefore, the predicted values from the cell means model and the reference cell model are identical. The two models differ only in how the region coefficients are parameterized, not in their fitted values or predictions.
