@@ -1,0 +1,141 @@
+
+
+# Module 7 Homework - Liane Emmim
+
+## Load Packages
+
+```{r}
+
+library(ISLR)
+library(rms)
+library(car)
+library(caret)
+library(ggplot2)
+
+data(Wage)
+```
+
+```{r}
+head(Wage)
+```
+
+## Task 1
+
+
+```{r}
+lm1 <- lm(wage ~ age, data = Wage)
+
+summary(lm1)
+```
+
+### Partial Effect Plot
+
+```{r}
+termplot(lm1,
+         partial = TRUE,
+         se = TRUE,
+         col.term = "blue")
+```
+
+### Component + Residual Plot
+
+```{r}
+crPlots(lm1)
+```
+
+### Answer
+
+The partial effect plot and the component-plus-residual plot indicate that the relationship between age and wage is not perfectly linear. Wage increases during early and middle adulthood before leveling off and slightly declining later in life. The curvature visible in the residual plot suggests that a simple linear term does not fully capture the relationship.
+
+---
+
+# Task 2
+
+```{r}
+dd <- datadist(Wage)
+options(datadist="dd")
+
+spline.mod <- ols(wage ~ rcs(age,4), data=Wage)
+
+anova(spline.mod)
+```
+
+### Partial Effect Plot
+
+```{r}
+spline.pred <- rms::Predict(spline.mod, age)
+
+plot(
+  spline.pred,
+  xlab = "Age",
+  ylab = "Predicted Wage"
+)
+```
+
+### Answer
+
+The restricted cubic spline produces a smooth nonlinear curve. Compared with the linear model, it captures faster wage growth at younger ages, slower growth during middle age, and a slight decline among older workers. The spline therefore provides a more realistic description of the age–wage relationship.
+
+---
+
+# Task 3
+
+```{r}
+set.seed(123)
+
+ctrl <- trainControl(method="cv",
+                     number=10)
+
+linear.cv <- train(
+  wage ~ age,
+  data=Wage,
+  method="lm",
+  trControl=ctrl
+)
+
+spline.cv <- train(
+  wage ~ splines::ns(age, df=4),
+  data=Wage,
+  method="lm",
+  trControl=ctrl
+)
+
+linear.cv
+spline.cv
+```
+
+### Answer
+
+Compare the RMSE (or MSE) from the two models. The spline model will typically produce a slightly lower prediction error than the linear model, indicating a modest improvement in predictive performance.
+
+---
+
+# Task 4
+
+```{r}
+Wage$pred.linear <- predict(lm1)
+
+Wage$pred.spline <- predict(spline.mod)
+
+ggplot(Wage,
+       aes(pred.linear,wage))+
+geom_point(alpha=.3)+
+geom_smooth()
+
+ggplot(Wage,
+       aes(pred.spline,wage))+
+geom_point(alpha=.3)+
+geom_smooth()
+```
+
+### Answer
+
+Both models are reasonably well calibrated. The spline model generally follows the observed data slightly better across the range of predicted wages, especially at lower and higher ages. Neither model shows substantial systematic miscalibration.
+
+---
+
+# Task 5
+
+### Final Conclusion
+
+The spline model captures the nonlinear relationship between age and wage more accurately than the simple linear regression model. Cross-validation generally shows a small improvement in predictive accuracy, while calibration remains good. Although the improvement is modest, the spline provides a more realistic representation of wage growth over a person's career. Therefore, the restricted cubic spline model would be preferred over the simple linear model.
