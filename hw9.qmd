@@ -1,0 +1,624 @@
+---
+title: "Module 9 Homework"
+author: Liane Emmim
+format:
+  html:
+    toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+
+```{r}
+
+
+library(NHANES)
+library(rms)
+library(dplyr)
+library(glmnet)
+library(plotly)
+library(knitr)
+
+options(prType = "html")
+
+data("NHANES", package = "NHANES")
+
+nhanes <- NHANES |>
+  select(Weight, Height, Age, Race1) |>
+  filter(Age >= 18) |>
+  na.omit() |>
+  as.data.frame()
+
+nhanes$Race1 <- droplevels(factor(nhanes$Race1))
+
+dd_nhanes <- datadist(nhanes)
+options(datadist = "dd_nhanes")
+
+c(`Complete cases` = nrow(nhanes))
+table(nhanes$Race1)
+```
+
+# Task 1: Sharing ladder
+
+The relationship between `Height` and `Weight` is modeled with a four-knot restricted cubic spline.
+
+The spline knots are calculated once and reused in every model.
+
+```{r}
+height_knots <- attr(rcs(nhanes$Height, 4), "parms")
+height_knots
+```
+
+## Fully shared model
+
+This model ignores race and fits one height curve for everyone.
+
+```{r}
+fit_shared <- ols(
+  Weight ~ rcs(Height, height_knots),
+  data = nhanes
+)
+
+fit_shared
+```
+
+```{r}
+ggplot(Predict(fit_shared, Height))
+```
+
+## Partial sharing: shared shape with group offsets
+
+This model gives each race group a different baseline but uses the same curve shape.
+
+```{r}
+fit_offset <- ols(
+  Weight ~ rcs(Height, height_knots) + Race1,
+  data = nhanes
+)
+
+fit_offset
+```
+
+```{r}
+ggplot(Predict(fit_offset, Height, Race1))
+```
+
+## Full interaction
+
+This model allows the complete height curve to differ by race group.
+
+```{r}
+fit_interaction <- ols(
+  Weight ~ rcs(Height, height_knots) * Race1,
+  data = nhanes
+)
+
+fit_interaction
+```
+
+```{r}
+ggplot(Predict(fit_interaction, Height, Race1))
+```
+
+## Fully separate models
+
+A separate spline model is fit within each race group.
+
+```{r}
+race_levels <- levels(nhanes$Race1)
+
+fit_separate <- lapply(race_levels, function(r) {
+  ols(
+    Weight ~ rcs(Height, height_knots),
+    data = nhanes |> filter(Race1 == r)
+  )
+})
+
+names(fit_separate) <- race_levels
+```
+
+## Ten-fold cross-validation
+
+```{r}
+set.seed(42)
+
+K <- 10
+fold_id <- sample(rep(1:K, length.out = nrow(nhanes)))
+
+cv_shared <- rep(NA, K)
+cv_offset <- rep(NA, K)
+cv_interaction <- rep(NA, K)
+cv_separate <- rep(NA, K)
+
+for (k in 1:K) {
+
+  train <- nhanes[fold_id != k, ]
+  test  <- nhanes[fold_id == k, ]
+
+  m1 <- ols(
+    Weight ~ rcs(Height, height_knots),
+    data = train
+  )
+
+  m2 <- ols(
+    Weight ~ rcs(Height, height_knots) + Race1,
+    data = train
+  )
+
+  m3 <- ols(
+    Weight ~ rcs(Height, height_knots) * Race1,
+    data = train
+  )
+
+  p1 <- predict(m1, test)
+  p2 <- predict(m2, test)
+  p3 <- predict(m3, test)
+
+  p4 <- rep(NA_real_, nrow(test))
+
+  for (r in race_levels) {
+
+    train_r <- train |> filter(Race1 == r)
+    test_rows <- which(test$Race1 == r)
+
+    if (length(test_rows) > 0) {
+
+      m4 <- ols(
+        Weight ~ rcs(Height, height_knots),
+        data = train_r
+      )
+
+      p4[test_rows] <- predict(
+        m4,
+        test[test_rows, ]
+      )
+    }
+  }
+
+  cv_shared[k] <- mean((p1 - test$Weight)^2)
+  cv_offset[k] <- mean((p2 - test$Weight)^2)
+  cv_interaction[k] <- mean((p3 - test$Weight)^2)
+  cv_separate[k] <- mean((p4 - test$Weight)^2)
+}
+
+task1_results <- data.frame(
+  Model = c(
+    "Fully shared",
+    "Shared shape + offset",
+    "Full interaction",
+    "Fully separate"
+  ),
+  CV_MSE = c(
+    mean(cv_shared),
+    mean(cv_offset),
+    mean(cv_interaction),
+    mean(cv_separate)
+  )
+)
+
+task1_results |>
+  arrange(CV_MSE) |>
+  kable(digits = 3)
+```
+
+## Task 1 answer
+
+The model with the lowest cross-validated MSE is the model best supported by the data. If two models have very similar MSE values, the simpler model is preferred because the additional complexity provides little practical improvement.
+
+# Task 2: Group-specific response surface
+
+This task uses `Height` and `Age` as two continuous predictors.
+
+The additive-in-group model uses one common nonlinear response surface with a separate race-group offset. The interactive-in-group model allows the entire response surface to differ by race group.
+
+```{r}
+fit_surface_add <- ols(
+  Weight ~ rcs(Height, 4) * rcs(Age, 4) + Race1,
+  data = nhanes
+)
+
+fit_surface_int <- ols(
+  Weight ~ rcs(Height, 4) * rcs(Age, 4) * Race1,
+  data = nhanes
+)
+```
+
+## Compare the response surfaces with cross-validation
+
+```{r}
+set.seed(42)
+
+cv_surface_add <- rep(NA, K)
+cv_surface_int <- rep(NA, K)
+
+for (k in 1:K) {
+
+  train <- nhanes[fold_id != k, ]
+  test  <- nhanes[fold_id == k, ]
+
+  m_add <- ols(
+    Weight ~ rcs(Height, 4) * rcs(Age, 4) + Race1,
+    data = train
+  )
+
+  m_int <- ols(
+    Weight ~ rcs(Height, 4) * rcs(Age, 4) * Race1,
+    data = train
+  )
+
+  cv_surface_add[k] <- mean(
+    (predict(m_add, test) - test$Weight)^2
+  )
+
+  cv_surface_int[k] <- mean(
+    (predict(m_int, test) - test$Weight)^2
+  )
+}
+
+task2_results <- data.frame(
+  Model = c(
+    "Additive in group",
+    "Interactive in group"
+  ),
+  CV_MSE = c(
+    mean(cv_surface_add),
+    mean(cv_surface_int)
+  )
+)
+
+task2_results |>
+  kable(digits = 3)
+```
+
+## Plot one surface for each race group
+
+```{r}
+height_grid <- seq(
+  quantile(nhanes$Height, 0.02),
+  quantile(nhanes$Height, 0.98),
+  length.out = 30
+)
+
+age_grid <- seq(
+  min(nhanes$Age),
+  max(nhanes$Age),
+  length.out = 30
+)
+
+surface_grid <- expand.grid(
+  Height = height_grid,
+  Age = age_grid
+)
+
+surface_plots <- list()
+
+for (r in race_levels) {
+
+  grid_r <- cbind(
+    surface_grid,
+    Race1 = factor(r, levels = race_levels)
+  )
+
+  z_r <- matrix(
+    predict(fit_surface_int, grid_r),
+    nrow = length(height_grid)
+  )
+
+  surface_plots[[r]] <- plot_ly(
+    x = ~height_grid,
+    y = ~age_grid,
+    z = ~z_r
+  ) |>
+    add_surface() |>
+    layout(
+      title = paste("Interactive surface:", r),
+      scene = list(
+        xaxis = list(title = "Height"),
+        yaxis = list(title = "Age"),
+        zaxis = list(title = "Predicted Weight")
+      )
+    )
+}
+
+surface_plots
+```
+
+## Task 2 answer
+
+The model with the lower CV-MSE has better predictive performance. If the interactive model has only a very small improvement, the additive-in-group model is adequate. A noticeably lower MSE for the interactive model would indicate that the height-age response surface differs by race group.
+
+# Task 3: Group-specific regularization
+
+The `contr.sum` parameterization makes the main height spline represent the average curve. The race terms and race-by-height interaction terms then represent group deviations from that average curve.
+
+```{r}
+nhanes_reg <- nhanes
+
+contrasts(nhanes_reg$Race1) <- contr.sum(
+  nlevels(nhanes_reg$Race1)
+)
+```
+
+## Create the model matrix
+
+```{r}
+X <- model.matrix(
+  Weight ~ rcs(Height, height_knots) * Race1,
+  data = nhanes_reg
+)
+
+y <- nhanes_reg$Weight
+
+assign_vec <- attr(X, "assign")
+
+term_labels <- attr(
+  terms(
+    Weight ~ rcs(Height, height_knots) * Race1
+  ),
+  "term.labels"
+)
+
+term_labels
+```
+
+The intercept is removed because `glmnet` adds its own intercept.
+
+```{r}
+X_glmnet <- X[, -1]
+```
+
+## Build the penalty factor
+
+The average height curve is not penalized. Only the race deviations and race-by-height deviations are penalized.
+
+```{r}
+deviation_terms <- which(
+  grepl("Race1", term_labels)
+)
+
+pf <- ifelse(
+  assign_vec[-1] %in% deviation_terms,
+  1,
+  0
+)
+
+data.frame(
+  Variable = colnames(X_glmnet),
+  PenaltyFactor = pf
+) |>
+  kable()
+```
+
+## Ridge regression
+
+```{r}
+set.seed(42)
+
+cv_ridge <- cv.glmnet(
+  X_glmnet,
+  y,
+  alpha = 0,
+  penalty.factor = pf,
+  nfolds = 10
+)
+
+plot(cv_ridge)
+
+c(
+  `lambda.min` = cv_ridge$lambda.min,
+  `lambda.1se` = cv_ridge$lambda.1se
+)
+```
+
+## Lasso regression
+
+```{r}
+set.seed(42)
+
+cv_lasso <- cv.glmnet(
+  X_glmnet,
+  y,
+  alpha = 1,
+  penalty.factor = pf,
+  nfolds = 10
+)
+
+plot(cv_lasso)
+
+c(
+  `lambda.min` = cv_lasso$lambda.min,
+  `lambda.1se` = cv_lasso$lambda.1se
+)
+```
+
+## Examine group deviations
+
+There are four deviation coefficients for each race group:
+
+1. A group intercept deviation
+2. A linear height deviation
+3. The first nonlinear height deviation
+4. The second nonlinear height deviation
+
+The final race group is reconstructed as the negative sum of the other groups because sum-to-zero contrasts require all group deviations to add to zero.
+
+```{r}
+race_main_term <- which(term_labels == "Race1")
+race_int_term <- which(
+  grepl("rcs\\(Height", term_labels) &
+    grepl("Race1", term_labels)
+)
+
+race_main_idx <- which(assign_vec[-1] == race_main_term)
+race_int_idx <- which(assign_vec[-1] == race_int_term)
+
+group_deviation_matrix <- function(beta_vector) {
+
+  output <- matrix(
+    NA_real_,
+    nrow = length(race_levels),
+    ncol = 4,
+    dimnames = list(
+      race_levels,
+      c("Intercept", "Height", "Height prime", "Height double prime")
+    )
+  )
+
+  for (j in seq_along(race_main_idx)) {
+
+    interaction_columns <- race_int_idx[
+      (3 * (j - 1) + 1):(3 * j)
+    ]
+
+    output[j, ] <- beta_vector[
+      c(race_main_idx[j], interaction_columns)
+    ]
+  }
+
+  output[nrow(output), ] <- -colSums(
+    output[-nrow(output), , drop = FALSE]
+  )
+
+  output
+}
+```
+
+### Ridge deviation size
+
+```{r}
+beta_ridge <- coef(
+  cv_ridge,
+  s = "lambda.min"
+)[-1, 1]
+
+ridge_deviations <- group_deviation_matrix(beta_ridge)
+
+ridge_norms <- sqrt(
+  rowSums(ridge_deviations^2)
+)
+
+ridge_results <- data.frame(
+  Race1 = race_levels,
+  n = as.numeric(table(nhanes$Race1)[race_levels]),
+  DeviationNorm = round(ridge_norms, 3)
+)
+
+ridge_results |>
+  arrange(DeviationNorm) |>
+  kable()
+```
+
+Groups with smaller deviation norms are pulled closer to the shared curve. Groups with larger deviation norms remain more distinct.
+
+### Lasso pooling status
+
+```{r}
+beta_lasso <- coef(
+  cv_lasso,
+  s = "lambda.min"
+)[-1, 1]
+
+lasso_deviations <- group_deviation_matrix(beta_lasso)
+
+number_nonzero <- rowSums(
+  abs(lasso_deviations) > 1e-8
+)
+
+lasso_status <- ifelse(
+  number_nonzero == 0,
+  "Fully pooled",
+  ifelse(
+    number_nonzero == 4,
+    "Not pooled",
+    "Partially pooled"
+  )
+)
+
+lasso_results <- data.frame(
+  Race1 = race_levels,
+  n = as.numeric(table(nhanes$Race1)[race_levels]),
+  NonzeroCoefficients = number_nonzero,
+  Status = lasso_status
+)
+
+lasso_results |>
+  kable()
+```
+
+## Task 3 answer
+
+The ridge model shrinks all race deviations toward zero but usually does not make them exactly zero. The lasso can set individual deviation coefficients to exactly zero. Groups with fewer nonzero coefficients are more strongly pooled toward the average curve. Groups with four nonzero coefficients remain the most distinct.
+
+# Task 4: Conclusion
+
+The final model should be selected primarily using cross-validated MSE.
+
+The Task 1 results show whether a fully shared, offset, interacted, or fully separate model predicts best. The ridge and lasso results show whether some group-specific differences can be retained while weaker differences are shrunk toward the average curve.
+
+A regularized model is preferred when it provides predictive performance similar to or better than the full interaction model while avoiding unstable group-specific curves. The amount of shrinkage should not be explained by sample size alone. A smaller group can still remain distinct when its observed relationship differs strongly from the average curve.
+
+# Task 5: Transformation matrix
+
+The standard treatment-coded matrix is called \(X\), and the sum-to-zero-coded matrix is called \(Z\).
+
+We need the matrix \(R\) such that
+
+\[
+Z = XR.
+\]
+
+```{r}
+nhanes_standard <- nhanes
+
+contrasts(nhanes_standard$Race1) <- contr.treatment(
+  nlevels(nhanes_standard$Race1)
+)
+
+nhanes_sum <- nhanes
+
+contrasts(nhanes_sum$Race1) <- contr.sum(
+  nlevels(nhanes_sum$Race1)
+)
+
+X_standard <- model.matrix(
+  ~ Race1,
+  data = nhanes_standard
+)
+
+Z_sum <- model.matrix(
+  ~ Race1,
+  data = nhanes_sum
+)
+```
+
+Because \(Z=XR\), the transformation matrix is
+
+\[
+R=(X^\mathsf{T}X)^{-1}X^\mathsf{T}Z.
+\]
+
+```{r}
+R <- solve(
+  crossprod(X_standard),
+  crossprod(X_standard, Z_sum)
+)
+
+rownames(R) <- colnames(X_standard)
+colnames(R) <- colnames(Z_sum)
+
+round(R, 3)
+```
+
+Verify the result.
+
+```{r}
+max(
+  abs(
+    Z_sum - X_standard %*% R
+  )
+)
+```
+
+The final value should be extremely close to zero, confirming that the matrix \(R\) correctly changes the treatment-coded design matrix into the sum-to-zero design matrix.
